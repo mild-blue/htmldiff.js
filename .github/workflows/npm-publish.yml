@@ -1,0 +1,32 @@
+name: Publish node.js Package
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install deps
+        run: yarn
+
+      - name: Build
+        run: yarn build
+
+      - name: Bump version in package.json
+        run: npm version "$(git tag --sort=committerdate | tail -1)" --no-git-tag-version
+
+      - name: Publish package
+        run: yarn publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
