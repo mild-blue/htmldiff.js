@@ -3,7 +3,7 @@
     "description": "Diff and markup HTML with <ins> and <del> tags",
     "companyname": "Mild Blue",
     "copyright": "©2024, Mild Blue; ©2022, idesis GmbH; ©2012 The Network Inc. and contributors",
-    "version": "0.9.4",
+    "version": "0.9.5",
     "identifier": "blue.mild.htmldiff-mildblue",
     "keywords": [
         "diff",
@@ -28,7 +28,7 @@
     "license": "MIT",
     "main": "js/htmldiff.js",
     "bin": {
-        "htmldiff": "./htmldiff-cli.js"
+        "htmldiff": "htmldiff-cli.js"
     },
     "files": [
         "js/htmldiff.js",
@@ -46,9 +46,9 @@
         "chai": "*",
         "eslint": "^8.33.0",
         "eslint-plugin-jsdoc": "^48.2.3",
+        "mocha": "*",
         "pkg": "5.8.0",
-        "typescript": "4.7.4",
-        "mocha": "*"
+        "typescript": "4.7.4"
     },
     "scripts": {
         "test": "mocha -R min",

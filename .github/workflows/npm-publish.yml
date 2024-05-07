@@ -18,12 +18,15 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install deps
-        run: npm ci
+        run: yarn
+
+      - name: Build
+        run: yarn make
 
       - name: Bump version in package.json
         run: npm version "$(git tag --sort=committerdate | tail -1)" --no-git-tag-version
 
       - name: Publish package
-        run: npm publish
+        run: yarn publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
