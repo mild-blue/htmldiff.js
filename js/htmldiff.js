@@ -70,7 +70,8 @@
      */
     var atomicTagsRegExp;
     // Added head and style (for style tags inside the body)
-    var defaultAtomicTagsRegExp = new RegExp('^<(iframe|object|math|svg|script|video|head|style|a)\b');
+    var defaultAtomicTagsRegExp = new RegExp('^<(iframe|object|math|svg|script|video|head|style|a|img)\\b');
+    var maxAtomicTagLength;
     
     /**
      * Checks if the current word is the beginning of an atomic tag. An atomic tag is one whose
@@ -98,7 +99,8 @@
      *    false otherwise.
      */
     function isEndOfAtomicTag(word, tag){
-        return word.substring(word.length - tag.length - 2) === ('</' + tag);
+        // todo: implement better handling of atomic tags - not all tags have a closing tag
+        return tag === "img" || word.substring(word.length - tag.length - 2) === ('</' + tag);
     }
 
     /**
@@ -179,7 +181,7 @@
             var char = html[i];
             switch (mode){
                 case 'tag':
-                    var atomicTag = isStartOfAtomicTag(currentWord);
+                    var atomicTag = currentWord.length - 1 <= maxAtomicTagLength ? isStartOfAtomicTag(currentWord) : null;
                     if (atomicTag){
                         mode = 'atomic_tag';
                         currentAtomicTag = atomicTag;
@@ -941,6 +943,15 @@
     }
 
     /**
+     * Finds the longest atomic tag and saves it to maxAtomicTagLength.
+     */
+    function calculateMaxAtomicTagLength(){
+        const pattern = atomicTagsRegExp.source;
+        const atomicTagsList = pattern.match(/\b\w+\b/g);
+        maxAtomicTagLength = atomicTagsList.reduce((max, tag) => Math.max(max, tag.length), 0);
+    }
+
+    /**
      * Compares two pieces of HTML content and returns the combined content with differences
      * wrapped in <ins> and <del> tags.
      *
@@ -951,7 +962,7 @@
      *      operation index data attribute will be named `data-${dataPrefix-}operation-index`.
      * @param {string} atomicTags (Optional) Comma separated list of atomic tag names. The 
      *     list has to be in the form `tag1,tag2,...` e. g. `head,script,style`. If not used, 
-     *     the default list `iframe,object,math,svg,script,video,head,style` will be used.
+     *     the default list `iframe,object,math,svg,script,video,head,style,a,img` will be used.
      *
      * @return {string} The combined HTML content with differences wrapped in <ins> and <del> tags.
      */
@@ -962,6 +973,7 @@
         atomicTags ? 
             (atomicTagsRegExp = new RegExp('^<(' + atomicTags.replace(/\s*/g, '').replace(/,/g, '|') + ')\b'))
             : (atomicTagsRegExp = defaultAtomicTagsRegExp);
+        calculateMaxAtomicTagLength();
 
         before = htmlToTokens(before);
         after = htmlToTokens(after);
