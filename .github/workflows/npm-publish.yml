@@ -23,6 +23,9 @@ jobs:
       - name: Build
         run: yarn make
 
+      - name: Build
+        run: yarn make
+
       - name: Bump version in package.json
         run: npm version "$(git tag --sort=committerdate | tail -1)" --no-git-tag-version
 
