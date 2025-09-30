@@ -53,7 +53,7 @@ Options:
   child nodes should not be compared - the entire tag should be treated
   as one token. This is useful for tags where it does not make sense to
   insert <ins> and <del> tags. If not used, this default list will be used:
-  "iframe,object,math,svg,script,video,head,style".`;
+  "iframe,object,math,svg,script,video,head,style,a,img".`;
     console.log(usage);
 }
 

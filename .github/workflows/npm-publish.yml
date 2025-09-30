@@ -18,7 +18,10 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install deps
-        run: npm ci
+        run: yarn
+
+      - name: Build
+        run: yarn make
 
       - name: Build
         run: yarn make
