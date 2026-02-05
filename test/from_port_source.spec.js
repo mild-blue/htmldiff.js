@@ -8,8 +8,7 @@ describe('The specs from the ruby source project', function(){
     it('should diff text', function(){
         var diff = cut('a word is here', 'a nother word is there');
         expect(diff).equal('a<ins data-operation-index="1"> nother</ins> word is ' +
-                '<del data-operation-index="3">here</del><ins data-operation-index="3">' +
-                'there</ins>');
+                '<ins data-operation-index="3">t</ins>here');
     });
 
     it('should insert a letter and a space', function(){

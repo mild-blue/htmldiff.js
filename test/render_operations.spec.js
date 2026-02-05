@@ -98,8 +98,7 @@ describe('renderOperations', function(){
             var after = tokenize(['test!', '</b>', 'non-bold', '<b>', 'bold']);
             res = cut(before, after);
 
-            expect(res).to.equal('<del data-operation-index="0">test</del>' +
-                    '<ins data-operation-index="0">test!</ins></b>non-bold<b>' +
+            expect(res).to.equal('test<ins data-operation-index="0">!</ins></b>non-bold<b>' +
                     '<ins data-operation-index="2">bold</ins>');
         });
 

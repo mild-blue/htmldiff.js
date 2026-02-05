@@ -243,6 +243,9 @@
                     } else {
                         currentWord += char;
                         words.push(createToken(currentWord));
+                        if (currentWord === "&nbsp;") {
+                            mode = "whitespace"
+                        }
                         currentWord = '';
                     }
                     break;
@@ -836,21 +839,35 @@
     };
 
     /**
+     * Builds the data-operation-index and optional class attributes for wrapper tags.
+     *
+     * @param {number} opIndex The index into the list of operations that identifies the change.
+     * @param {string} dataPrefix (Optional) The prefix to use for data attributes.
+     * @param {string} className (Optional) The class name to include in the wrapper tag.
+     *
+     * @return {string} The attribute string to include in a wrapper tag.
+     */
+    function getOperationAttributes(opIndex, dataPrefix, className){
+        var prefix = dataPrefix ? dataPrefix + '-' : '';
+        var attrs = ' data-' + prefix + 'operation-index="' + opIndex + '"';
+        if (className){
+            attrs += ' class="' + className + '"';
+        }
+        return attrs;
+    }
+    
+    /**
      * Wraps and concatenates a list of tokens with a tag. Does not wrap tag tokens,
      * unless they are wrappable (i.e. void and atomic tags).
      *
-     * @param {sting} tag The tag name of the wrapper tags.
+     * @param {string} tag The tag name of the wrapper tags.
      * @param {Array.<string>} content The list of tokens to wrap.
      * @param {string} dataPrefix (Optional) The prefix to use in data attributes.
      * @param {string} className (Optional) The class name to include in the wrapper tag.
      */
     function wrap(tag, content, opIndex, dataPrefix, className){
         var wrapper = new TokenWrapper(content);
-        dataPrefix = dataPrefix ? dataPrefix + '-' : '';
-        var attrs = ' data-' + dataPrefix + 'operation-index="' + opIndex + '"';
-        if (className){
-            attrs += ' class="' + className + '"';
-        }
+        var attrs = getOperationAttributes(opIndex, dataPrefix, className);
 
         return wrapper.combine(function(segment){
             if (segment.isWrappable){
@@ -864,10 +881,202 @@
             return '';
         }, function(openingTag){
             var dataAttrs = ' data-diff-node="' + tag + '"';
-            dataAttrs += ' data-' + dataPrefix + 'operation-index="' + opIndex + '"';
+            dataAttrs += getOperationAttributes(opIndex, dataPrefix);
 
             return openingTag.replace(/>\s*$/, dataAttrs + '$&');
         });
+    }
+
+    /**
+     * Wraps a raw text segment (not token-aware) in a tag with the operation attributes.
+     *
+     * @param {string} tag The tag name of the wrapper tags.
+     * @param {string} text The text to wrap.
+     * @param {number} opIndex The index into the list of operations that identifies the change.
+     * @param {string} dataPrefix (Optional) The prefix to use for data attributes.
+     * @param {string} className (Optional) The class name to include in the wrapper tag.
+     *
+     * @return {string} The wrapped HTML.
+     */
+    function wrapInlineText(tag, text, opIndex, dataPrefix, className){
+        var attrs = getOperationAttributes(opIndex, dataPrefix, className);
+        return '<' + tag + attrs + '>' + text + '</' + tag + '>';
+    }
+
+    /**
+     * Finds a single-character substitution between equal-length strings.
+     *
+     * @param {string} beforeStr The original text.
+     * @param {string} afterStr The updated text.
+     *
+     * @return {Object|null} The diff parts or null if not a single edit.
+     */
+    function singleEditDiffReplace(beforeStr, afterStr){
+        var diffIndex = -1;
+        for (var i = 0; i < beforeStr.length; i++){
+            if (beforeStr[i] !== afterStr[i]){
+                if (diffIndex !== -1){
+                    return null;
+                }
+                diffIndex = i;
+            }
+        }
+
+        if (diffIndex === -1){
+            return null;
+        }
+
+        return {
+            prefix: beforeStr.slice(0, diffIndex),
+            del: beforeStr[diffIndex],
+            ins: afterStr[diffIndex],
+            suffix: beforeStr.slice(diffIndex + 1)
+        };
+    }
+
+    /**
+     * Finds a single-character insertion between strings of length N and N+1.
+     *
+     * @param {string} beforeStr The original text.
+     * @param {string} afterStr The updated text.
+     *
+     * @return {Object|null} The diff parts or null if not a single edit.
+     */
+    function singleEditDiffInsert(beforeStr, afterStr){
+        for (var insertIndex = 0; insertIndex <= beforeStr.length; insertIndex++){
+            if (beforeStr[insertIndex] !== afterStr[insertIndex]){
+                if (beforeStr.slice(insertIndex) !== afterStr.slice(insertIndex + 1)){
+                    return null;
+                }
+                return {
+                    prefix: beforeStr.slice(0, insertIndex),
+                    ins: afterStr[insertIndex],
+                    suffix: beforeStr.slice(insertIndex)
+                };
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Finds a single-character deletion between strings of length N and N-1.
+     *
+     * @param {string} beforeStr The original text.
+     * @param {string} afterStr The updated text.
+     *
+     * @return {Object|null} The diff parts or null if not a single edit.
+     */
+    function singleEditDiffDelete(beforeStr, afterStr){
+        for (var deleteIndex = 0; deleteIndex <= afterStr.length; deleteIndex++){
+            if (beforeStr[deleteIndex] !== afterStr[deleteIndex]){
+                if (beforeStr.slice(deleteIndex + 1) !== afterStr.slice(deleteIndex)){
+                    return null;
+                }
+                return {
+                    prefix: beforeStr.slice(0, deleteIndex),
+                    del: beforeStr[deleteIndex],
+                    suffix: beforeStr.slice(deleteIndex + 1)
+                };
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Finds a single-character edit between two strings.
+     *
+     * @param {string} beforeStr The original text.
+     * @param {string} afterStr The updated text.
+     *
+     * @return {Object|null} The diff parts or null if not a single edit.
+     */
+    function singleEditDiff(beforeStr, afterStr){
+        var lengthDiff = afterStr.length - beforeStr.length;
+
+        if (lengthDiff === 0){
+            return singleEditDiffReplace(beforeStr, afterStr);
+        } 
+        else if (lengthDiff === 1){
+            return singleEditDiffInsert(beforeStr, afterStr);
+        }
+        else {
+            return singleEditDiffDelete(beforeStr, afterStr);
+        }
+    }
+
+    /**
+     * Checks if two tokens are eligible for inline single-character diffing.
+     *
+     * @param {Object} beforeToken The token from the before list.
+     * @param {Object} afterToken The token from the after list.
+     *
+     * @return {boolean} True if the tokens can be compared inline.
+     */
+    function isSingleTokenTextEditEligible(beforeToken, afterToken){
+        if (!beforeToken || !afterToken){
+            return false;
+        }
+
+        if (isTag(beforeToken.string) || isTag(afterToken.string)){
+            return false;
+        }
+
+        if (/\s/.test(beforeToken.string) || /\s/.test(afterToken.string)){
+            return false;
+        }
+
+        if (beforeToken.string === afterToken.string){
+            return false;
+        }
+
+        if (Math.abs(beforeToken.string.length - afterToken.string.length) > 1){
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Renders a single-token inline edit, if possible.
+     *
+     * @param {Object} op The operation that applies to a particular list of tokens.
+     * @param {Array.<string>} beforeTokens The before list of tokens.
+     * @param {Array.<string>} afterTokens The after list of tokens.
+     * @param {number} opIndex The index into the list of operations that identifies the change.
+     * @param {string} dataPrefix (Optional) The prefix to use for data attributes.
+     * @param {string} className (Optional) The class name to include in the wrapper tag.
+     *
+     * @return {string|null} The inline diff HTML or null if not applicable.
+     */
+    function renderSingleTokenEdit(op, beforeTokens, afterTokens, opIndex, dataPrefix, className){
+        if (op.startInBefore !== op.endInBefore || op.startInAfter !== op.endInAfter){
+            return null;
+        }
+
+        var beforeToken = beforeTokens[op.startInBefore];
+        var afterToken = afterTokens[op.startInAfter];
+        
+        if (!isSingleTokenTextEditEligible(beforeToken, afterToken)){
+            return null;
+        }
+
+        var diff = singleEditDiff(beforeToken.string, afterToken.string);
+        if (!diff){
+            return null;
+        }
+
+        var result = diff.prefix;
+        if (diff.del){
+            result += wrapInlineText('del', diff.del, opIndex, dataPrefix, className);
+        }
+        if (diff.ins){
+            result += wrapInlineText('ins', diff.ins, opIndex, dataPrefix, className);
+        }
+        result += diff.suffix;
+
+        return result;
     }
 
     /**
@@ -911,7 +1120,11 @@
             });
             return wrap('del', val, opIndex, dataPrefix, className);
         },
-        'replace': function(){
+        'replace': function(op, beforeTokens, afterTokens, opIndex, dataPrefix, className){
+            var singleTokenresult = renderSingleTokenEdit(op, beforeTokens, afterTokens, opIndex, dataPrefix, className);
+            if (singleTokenresult){
+                return singleTokenresult;
+            }
             return OPS['delete'].apply(null, arguments) + OPS['insert'].apply(null, arguments);
         }
     };
