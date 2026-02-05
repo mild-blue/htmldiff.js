@@ -21,11 +21,33 @@ describe('Diff', function(){
       beforeEach(function(){
         res = cut('input', 'input 2');
       });
-  
+
       it('should mark the new letter', function(){
         expect(res).to.equal('input<ins data-operation-index="1"> 2</ins>');
       });
     }); // describe('When a letter is added')
+
+    describe('When a single character changes inside a word', function(){
+      it('should only wrap the changed character', function(){
+        res = cut('word', 'ward');
+        expect(res).to.equal('w<del data-operation-index="0">o</del>' +
+          '<ins data-operation-index="0">a</ins>rd');
+      });
+    }); // describe('When a single character changes inside a word')
+
+    describe('When a single character is inserted into a word', function(){
+      it('should only wrap the inserted character', function(){
+        res = cut('word', 'world');
+        expect(res).to.equal('wor<ins data-operation-index="0">l</ins>d');
+      });
+    }); // describe('When a single character is inserted into a word')
+
+    describe('When a single character is deleted from a word', function(){
+      it('should only wrap the deleted character', function(){
+        res = cut('world', 'word');
+        expect(res).to.equal('wor<del data-operation-index="0">l</del>d');
+      });
+    }); // describe('When a single character is deleted from a word')
   
     describe('Whitespace differences', function(){
       it('should collapse adjacent whitespace', function(){
