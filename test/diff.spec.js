@@ -48,6 +48,20 @@ describe('Diff', function(){
         expect(res).to.equal('wor<del data-operation-index="0">l</del>d');
       });
     }); // describe('When a single character is deleted from a word')
+
+    describe('When multiple consecutive characters change in a word', function(){
+      it('should inline the change when the max length allows it', function(){
+        res = cut('world', 'worried', undefined, undefined, undefined, 3);
+        expect(res).to.equal('wor<del data-operation-index="0">l</del>' +
+          '<ins data-operation-index="0">rie</ins>d');
+      });
+
+      it('should fall back when the max length is too small', function(){
+        res = cut('world', 'worried');
+        expect(res).to.equal('<del data-operation-index="0">world</del>' +
+          '<ins data-operation-index="0">worried</ins>');
+      });
+    }); // describe('When multiple consecutive characters change in a word')
   
     describe('Whitespace differences', function(){
       it('should collapse adjacent whitespace', function(){

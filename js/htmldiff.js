@@ -72,6 +72,7 @@
     // Added head and style (for style tags inside the body)
     var defaultAtomicTagsRegExp = new RegExp('^<(iframe|object|math|svg|script|video|head|style|a|img)\\b');
     var maxAtomicTagLength;
+    var inlineDiffMaxLength = 1;
     
     /**
      * Checks if the current word is the beginning of an atomic tag. An atomic tag is one whose
@@ -904,117 +905,60 @@
     }
 
     /**
-     * Finds a single-character substitution between equal-length strings.
+     * Finds a single consecutive edit span between two strings.
      *
      * @param {string} beforeStr The original text.
      * @param {string} afterStr The updated text.
+     * @param {number} maxLength The maximum length of a consecutive edit span.
      *
-     * @return {Object|null} The diff parts or null if not a single edit.
+     * @return {Object|null} The diff parts or null if not a single span.
      */
-    function singleEditDiffReplace(beforeStr, afterStr){
-        var diffIndex = -1;
-        for (var i = 0; i < beforeStr.length; i++){
-            if (beforeStr[i] !== afterStr[i]){
-                if (diffIndex !== -1){
-                    return null;
-                }
-                diffIndex = i;
-            }
+    function singleSpanDiff(beforeStr, afterStr, maxLength){
+        var start = 0;
+        var beforeLength = beforeStr.length;
+        var afterLength = afterStr.length;
+
+        while (start < beforeLength && start < afterLength &&
+                beforeStr[start] === afterStr[start]){
+            start++;
         }
 
-        if (diffIndex === -1){
+        var endBefore = beforeLength - 1;
+        var endAfter = afterLength - 1;
+        while (endBefore >= start && endAfter >= start &&
+                beforeStr[endBefore] === afterStr[endAfter]){
+            endBefore--;
+            endAfter--;
+        }
+
+        var beforeMiddle = beforeStr.slice(start, endBefore + 1);
+        var afterMiddle = afterStr.slice(start, endAfter + 1);
+
+        if (!beforeMiddle && !afterMiddle){
+            return null;
+        }
+
+        if (beforeMiddle.length > maxLength || afterMiddle.length > maxLength){
             return null;
         }
 
         return {
-            prefix: beforeStr.slice(0, diffIndex),
-            del: beforeStr[diffIndex],
-            ins: afterStr[diffIndex],
-            suffix: beforeStr.slice(diffIndex + 1)
+            prefix: beforeStr.slice(0, start),
+            suffix: beforeStr.slice(endBefore + 1),
+            del: beforeMiddle || null,
+            ins: afterMiddle || null
         };
     }
 
     /**
-     * Finds a single-character insertion between strings of length N and N+1.
-     *
-     * @param {string} beforeStr The original text.
-     * @param {string} afterStr The updated text.
-     *
-     * @return {Object|null} The diff parts or null if not a single edit.
-     */
-    function singleEditDiffInsert(beforeStr, afterStr){
-        for (var insertIndex = 0; insertIndex <= beforeStr.length; insertIndex++){
-            if (beforeStr[insertIndex] !== afterStr[insertIndex]){
-                if (beforeStr.slice(insertIndex) !== afterStr.slice(insertIndex + 1)){
-                    return null;
-                }
-                return {
-                    prefix: beforeStr.slice(0, insertIndex),
-                    ins: afterStr[insertIndex],
-                    suffix: beforeStr.slice(insertIndex)
-                };
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Finds a single-character deletion between strings of length N and N-1.
-     *
-     * @param {string} beforeStr The original text.
-     * @param {string} afterStr The updated text.
-     *
-     * @return {Object|null} The diff parts or null if not a single edit.
-     */
-    function singleEditDiffDelete(beforeStr, afterStr){
-        for (var deleteIndex = 0; deleteIndex <= afterStr.length; deleteIndex++){
-            if (beforeStr[deleteIndex] !== afterStr[deleteIndex]){
-                if (beforeStr.slice(deleteIndex + 1) !== afterStr.slice(deleteIndex)){
-                    return null;
-                }
-                return {
-                    prefix: beforeStr.slice(0, deleteIndex),
-                    del: beforeStr[deleteIndex],
-                    suffix: beforeStr.slice(deleteIndex + 1)
-                };
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Finds a single-character edit between two strings.
-     *
-     * @param {string} beforeStr The original text.
-     * @param {string} afterStr The updated text.
-     *
-     * @return {Object|null} The diff parts or null if not a single edit.
-     */
-    function singleEditDiff(beforeStr, afterStr){
-        var lengthDiff = afterStr.length - beforeStr.length;
-
-        if (lengthDiff === 0){
-            return singleEditDiffReplace(beforeStr, afterStr);
-        } 
-        else if (lengthDiff === 1){
-            return singleEditDiffInsert(beforeStr, afterStr);
-        }
-        else {
-            return singleEditDiffDelete(beforeStr, afterStr);
-        }
-    }
-
-    /**
-     * Checks if two tokens are eligible for inline single-character diffing.
+     * Checks if two tokens are eligible for inline consecutive edit diffing.
      *
      * @param {Object} beforeToken The token from the before list.
      * @param {Object} afterToken The token from the after list.
      *
      * @return {boolean} True if the tokens can be compared inline.
      */
-    function isSingleTokenTextEditEligible(beforeToken, afterToken){
+    function isConsecutiveEditDiffEligible(beforeToken, afterToken){
         if (!beforeToken || !afterToken){
             return false;
         }
@@ -1031,15 +975,11 @@
             return false;
         }
 
-        if (Math.abs(beforeToken.string.length - afterToken.string.length) > 1){
-            return false;
-        }
-
         return true;
     }
 
     /**
-     * Renders a single-token inline edit, if possible.
+     * Renders a consecutive inline edit diff, if possible.
      *
      * @param {Object} op The operation that applies to a particular list of tokens.
      * @param {Array.<string>} beforeTokens The before list of tokens.
@@ -1050,7 +990,7 @@
      *
      * @return {string|null} The inline diff HTML or null if not applicable.
      */
-    function renderSingleTokenEdit(op, beforeTokens, afterTokens, opIndex, dataPrefix, className){
+    function renderConsecutiveEditDiff(op, beforeTokens, afterTokens, opIndex, dataPrefix, className){
         if (op.startInBefore !== op.endInBefore || op.startInAfter !== op.endInAfter){
             return null;
         }
@@ -1058,11 +998,11 @@
         var beforeToken = beforeTokens[op.startInBefore];
         var afterToken = afterTokens[op.startInAfter];
         
-        if (!isSingleTokenTextEditEligible(beforeToken, afterToken)){
+        if (!isConsecutiveEditDiffEligible(beforeToken, afterToken)){
             return null;
         }
 
-        var diff = singleEditDiff(beforeToken.string, afterToken.string);
+        var diff = singleSpanDiff(beforeToken.string, afterToken.string, inlineDiffMaxLength);
         if (!diff){
             return null;
         }
@@ -1121,9 +1061,9 @@
             return wrap('del', val, opIndex, dataPrefix, className);
         },
         'replace': function(op, beforeTokens, afterTokens, opIndex, dataPrefix, className){
-            var singleTokenresult = renderSingleTokenEdit(op, beforeTokens, afterTokens, opIndex, dataPrefix, className);
-            if (singleTokenresult){
-                return singleTokenresult;
+            var consecutiveEditResult = renderConsecutiveEditDiff(op, beforeTokens, afterTokens, opIndex, dataPrefix, className);
+            if (consecutiveEditResult){
+                return consecutiveEditResult;
             }
             return OPS['delete'].apply(null, arguments) + OPS['insert'].apply(null, arguments);
         }
@@ -1176,11 +1116,19 @@
      * @param {string} atomicTags (Optional) Comma separated list of atomic tag names. The 
      *     list has to be in the form `tag1,tag2,...` e. g. `head,script,style`. If not used, 
      *     the default list `iframe,object,math,svg,script,video,head,style,a,img` will be used.
+     * @param {number} maxInlineDiffLength (Optional) The maximum length of a consecutive change
+     *     span to render inline within a word. Defaults to 1.
      *
      * @return {string} The combined HTML content with differences wrapped in <ins> and <del> tags.
      */
-    function diff(before, after, className, dataPrefix, atomicTags){
+    function diff(before, after, className, dataPrefix, atomicTags, maxInlineDiffLength){
         if (before === after) return before;
+
+        if (typeof maxInlineDiffLength === 'number' && maxInlineDiffLength >= 0){
+            inlineDiffMaxLength = maxInlineDiffLength;
+        } else {
+            inlineDiffMaxLength = 1;
+        }
 
         // Enable user provided atomic tag list.
         atomicTags ? 
