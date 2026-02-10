@@ -72,6 +72,7 @@
     // Added head and style (for style tags inside the body)
     var defaultAtomicTagsRegExp = new RegExp('^<(iframe|object|math|svg|script|video|head|style|a|img)\\b');
     var maxAtomicTagLength;
+    var inlineDiffMaxLength = 1;
     
     /**
      * Checks if the current word is the beginning of an atomic tag. An atomic tag is one whose
@@ -243,6 +244,9 @@
                     } else {
                         currentWord += char;
                         words.push(createToken(currentWord));
+                        if (currentWord === "&nbsp;") {
+                            mode = "whitespace"
+                        }
                         currentWord = '';
                     }
                     break;
@@ -836,21 +840,35 @@
     };
 
     /**
+     * Builds the data-operation-index and optional class attributes for wrapper tags.
+     *
+     * @param {number} opIndex The index into the list of operations that identifies the change.
+     * @param {string} dataPrefix (Optional) The prefix to use for data attributes.
+     * @param {string} className (Optional) The class name to include in the wrapper tag.
+     *
+     * @return {string} The attribute string to include in a wrapper tag.
+     */
+    function getOperationAttributes(opIndex, dataPrefix, className){
+        var prefix = dataPrefix ? dataPrefix + '-' : '';
+        var attrs = ' data-' + prefix + 'operation-index="' + opIndex + '"';
+        if (className){
+            attrs += ' class="' + className + '"';
+        }
+        return attrs;
+    }
+    
+    /**
      * Wraps and concatenates a list of tokens with a tag. Does not wrap tag tokens,
      * unless they are wrappable (i.e. void and atomic tags).
      *
-     * @param {sting} tag The tag name of the wrapper tags.
+     * @param {string} tag The tag name of the wrapper tags.
      * @param {Array.<string>} content The list of tokens to wrap.
      * @param {string} dataPrefix (Optional) The prefix to use in data attributes.
      * @param {string} className (Optional) The class name to include in the wrapper tag.
      */
     function wrap(tag, content, opIndex, dataPrefix, className){
         var wrapper = new TokenWrapper(content);
-        dataPrefix = dataPrefix ? dataPrefix + '-' : '';
-        var attrs = ' data-' + dataPrefix + 'operation-index="' + opIndex + '"';
-        if (className){
-            attrs += ' class="' + className + '"';
-        }
+        var attrs = getOperationAttributes(opIndex, dataPrefix, className);
 
         return wrapper.combine(function(segment){
             if (segment.isWrappable){
@@ -864,10 +882,141 @@
             return '';
         }, function(openingTag){
             var dataAttrs = ' data-diff-node="' + tag + '"';
-            dataAttrs += ' data-' + dataPrefix + 'operation-index="' + opIndex + '"';
+            dataAttrs += getOperationAttributes(opIndex, dataPrefix);
 
             return openingTag.replace(/>\s*$/, dataAttrs + '$&');
         });
+    }
+
+    /**
+     * Wraps a raw text segment (not token-aware) in a tag with the operation attributes.
+     *
+     * @param {string} tag The tag name of the wrapper tags.
+     * @param {string} text The text to wrap.
+     * @param {number} opIndex The index into the list of operations that identifies the change.
+     * @param {string} dataPrefix (Optional) The prefix to use for data attributes.
+     * @param {string} className (Optional) The class name to include in the wrapper tag.
+     *
+     * @return {string} The wrapped HTML.
+     */
+    function wrapInlineText(tag, text, opIndex, dataPrefix, className){
+        var attrs = getOperationAttributes(opIndex, dataPrefix, className);
+        return '<' + tag + attrs + '>' + text + '</' + tag + '>';
+    }
+
+    /**
+     * Finds a single consecutive edit span between two strings.
+     *
+     * @param {string} beforeStr The original text.
+     * @param {string} afterStr The updated text.
+     * @param {number} maxLength The maximum length of a consecutive edit span.
+     *
+     * @return {Object|null} The diff parts or null if not a single span.
+     */
+    function singleSpanDiff(beforeStr, afterStr, maxLength){
+        var start = 0;
+        var beforeLength = beforeStr.length;
+        var afterLength = afterStr.length;
+
+        while (start < beforeLength && start < afterLength &&
+                beforeStr[start] === afterStr[start]){
+            start++;
+        }
+
+        var endBefore = beforeLength - 1;
+        var endAfter = afterLength - 1;
+        while (endBefore >= start && endAfter >= start &&
+                beforeStr[endBefore] === afterStr[endAfter]){
+            endBefore--;
+            endAfter--;
+        }
+
+        var beforeMiddle = beforeStr.slice(start, endBefore + 1);
+        var afterMiddle = afterStr.slice(start, endAfter + 1);
+
+        if (!beforeMiddle && !afterMiddle){
+            return null;
+        }
+
+        if (beforeMiddle.length > maxLength || afterMiddle.length > maxLength){
+            return null;
+        }
+
+        return {
+            prefix: beforeStr.slice(0, start),
+            suffix: beforeStr.slice(endBefore + 1),
+            del: beforeMiddle || null,
+            ins: afterMiddle || null
+        };
+    }
+
+    /**
+     * Checks if two tokens are eligible for inline consecutive edit diffing.
+     *
+     * @param {Object} beforeToken The token from the before list.
+     * @param {Object} afterToken The token from the after list.
+     *
+     * @return {boolean} True if the tokens can be compared inline.
+     */
+    function isConsecutiveEditDiffEligible(beforeToken, afterToken){
+        if (!beforeToken || !afterToken){
+            return false;
+        }
+
+        if (isTag(beforeToken.string) || isTag(afterToken.string)){
+            return false;
+        }
+
+        if (/\s/.test(beforeToken.string) || /\s/.test(afterToken.string)){
+            return false;
+        }
+
+        if (beforeToken.string === afterToken.string){
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Renders a consecutive inline edit diff, if possible.
+     *
+     * @param {Object} op The operation that applies to a particular list of tokens.
+     * @param {Array.<string>} beforeTokens The before list of tokens.
+     * @param {Array.<string>} afterTokens The after list of tokens.
+     * @param {number} opIndex The index into the list of operations that identifies the change.
+     * @param {string} dataPrefix (Optional) The prefix to use for data attributes.
+     * @param {string} className (Optional) The class name to include in the wrapper tag.
+     *
+     * @return {string|null} The inline diff HTML or null if not applicable.
+     */
+    function renderConsecutiveEditDiff(op, beforeTokens, afterTokens, opIndex, dataPrefix, className){
+        if (op.startInBefore !== op.endInBefore || op.startInAfter !== op.endInAfter){
+            return null;
+        }
+
+        var beforeToken = beforeTokens[op.startInBefore];
+        var afterToken = afterTokens[op.startInAfter];
+        
+        if (!isConsecutiveEditDiffEligible(beforeToken, afterToken)){
+            return null;
+        }
+
+        var diff = singleSpanDiff(beforeToken.string, afterToken.string, inlineDiffMaxLength);
+        if (!diff){
+            return null;
+        }
+
+        var result = diff.prefix;
+        if (diff.del){
+            result += wrapInlineText('del', diff.del, opIndex, dataPrefix, className);
+        }
+        if (diff.ins){
+            result += wrapInlineText('ins', diff.ins, opIndex, dataPrefix, className);
+        }
+        result += diff.suffix;
+
+        return result;
     }
 
     /**
@@ -911,7 +1060,11 @@
             });
             return wrap('del', val, opIndex, dataPrefix, className);
         },
-        'replace': function(){
+        'replace': function(op, beforeTokens, afterTokens, opIndex, dataPrefix, className){
+            var consecutiveEditResult = renderConsecutiveEditDiff(op, beforeTokens, afterTokens, opIndex, dataPrefix, className);
+            if (consecutiveEditResult){
+                return consecutiveEditResult;
+            }
             return OPS['delete'].apply(null, arguments) + OPS['insert'].apply(null, arguments);
         }
     };
@@ -963,11 +1116,19 @@
      * @param {string} atomicTags (Optional) Comma separated list of atomic tag names. The 
      *     list has to be in the form `tag1,tag2,...` e. g. `head,script,style`. If not used, 
      *     the default list `iframe,object,math,svg,script,video,head,style,a,img` will be used.
+     * @param {number} maxInlineDiffLength (Optional) The maximum length of a consecutive change
+     *     span to render inline within a word. Defaults to 1.
      *
      * @return {string} The combined HTML content with differences wrapped in <ins> and <del> tags.
      */
-    function diff(before, after, className, dataPrefix, atomicTags){
+    function diff(before, after, className, dataPrefix, atomicTags, maxInlineDiffLength){
         if (before === after) return before;
+
+        if (typeof maxInlineDiffLength === 'number' && maxInlineDiffLength >= 0){
+            inlineDiffMaxLength = maxInlineDiffLength;
+        } else {
+            inlineDiffMaxLength = 1;
+        }
 
         // Enable user provided atomic tag list.
         atomicTags ? 
