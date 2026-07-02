@@ -2,14 +2,17 @@ name: CI
 
 on:
   pull_request:
+    types: [ opened, synchronize, reopened, ready_for_review ]
     branches:
       - "master"
-  push:
-    branches:
-      - main
+
+# Cancel superseded runs on the same PR/branch to save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,11 +22,14 @@ jobs:
           node-version-file: ".nvmrc"
           cache: "yarn"
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: yarn install --frozen-lockfile
-
-      - name: Run Tests
-        run: yarn test
 
       - name: Lint
         run: yarn lint
+
+      - name: Type check (compile TypeScript)
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Run tests
+        run: yarn test
