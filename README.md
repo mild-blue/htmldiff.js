@@ -5,12 +5,14 @@ Diff and markup HTML with `<ins>` and `<del>` tags.
 
 ## Origin
 
-Quote from the original source of this fork:
+This is the [Mild Blue](https://mild.blue/) fork of `htmldiff.js`, maintained at
+[mild-blue/htmldiff.js](https://github.com/mild-blue/htmldiff.js) and published to npm as
+[`htmldiff-mildblue`](https://www.npmjs.com/package/htmldiff-mildblue).
 
-*`htmldiff.js` is a JavaScript port of [https://github.com/myobie/htmldiff](https://github.com/myobie/htmldiff) by
-[Keanu Lee](http://keanulee.com) at [Inkling](https://www.inkling.com/).*
-
-**htmldiff.js** is based on [this fork](https://github.com/inkling/htmldiff.js) and adds a few things:
+It is based on the [idesis GmbH fork](https://github.com/idesis-gmbh/htmldiff.js), which in turn
+builds on [Inkling's fork](https://github.com/inkling/htmldiff.js) of the original
+[htmldiff](https://github.com/myobie/htmldiff), a JavaScript port by
+[Keanu Lee](http://keanulee.com). Compared to the original it adds:
 
 - Diffing of video, math, widget, iframe, img and svg tags.
 - Ability to set atomic tags via the API.
@@ -28,6 +30,12 @@ instead it will insert the appropriate tags for changed/added/deleted text nodes
 tags or tag hierarchies.
 
 The module can be used as module in Node.js, with RequireJS, or even just as a script tag.
+
+## Installation
+
+```bash
+npm install htmldiff-mildblue
+```
 
 ## API
 
@@ -73,7 +81,7 @@ of these three parameters it will be ignored:
 JavaScript:
 
 ```javascript
-  diff = require('node-htmldiff');
+  diff = require('htmldiff-mildblue');
 
   console.log(diff('<p>This is some text</p>', '<p>That is some more text</p>', 'myClass'));
 ```
@@ -81,7 +89,7 @@ JavaScript:
 TypeScript:
 
 ```javascript
-  import diff = require("node-htmldiff");
+  import diff = require("htmldiff-mildblue");
 
   console.log(diff("<p>This is some text</p>", "<p>That is some more text</p>", "myClass"));
 ```
@@ -123,7 +131,7 @@ description please see API documentation above.
 
 After cloning the repository run `npm i` or `npm install` to install the necessary 
 dependencies. A run of `npm run make` creates the JavaScript output file. 
-`npm run lint` checks the TypeScript sources with TSLint. `npm test` runs all the
+`npm run lint` checks the TypeScript sources with ESLint. `npm test` runs all the
 tests from the `test` directory. `npm run testsample` diffs the HTML sample files 
 from the directory `sample` and logs the result to the console.
 
@@ -138,10 +146,13 @@ This module wouldn't have been possible without code from the following projects
 - Original project: [The Network Inc.](http://www.tninetwork.com), [Github](https://github.com/tnwinc/htmldiff.js)
 - Massive improvements of the original code: [Inkling](https://www.inkling.com), [Github](https://github.com/inkling/htmldiff.js)
 - Support of more tags: Ian White, [Github](https://github.com/ian97531)
+- Atomic tags API, CLI, TypeScript support and documentation: [idesis GmbH](https://www.idesis.de), [Github](https://github.com/idesis-gmbh/htmldiff.js)
+- Current fork and maintenance: [Mild Blue](https://mild.blue/), [Github](https://github.com/mild-blue/htmldiff.js)
 
 
 ## License
 
-MIT © [idesis GmbH](https://www.idesis.de), Max-Keith-Straße 66 (E 11), D-45136 Essen
+MIT © [Mild Blue](https://mild.blue/), building on work © idesis GmbH and
+© The Network Inc. and contributors.
 
 See the `LICENSE` file for details.
